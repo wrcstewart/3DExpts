@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="e7d8a9e7-3459-4990-8bb9-78314319de0f" name="gitServer" url="http://github.com/wrcstewart/test1">
+        <fileTransfer host="github.com/wrcstewart/test1" port="21" username="wrcstewart@yahoo.co.uk">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

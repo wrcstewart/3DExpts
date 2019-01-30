@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>01.07 - Control variables</title>
+    <script src="js/three.js"></script>
+    <script src="js/dat.gui.min.js"></script>
+    <script src="libs/SVGRenderer.js"></script>
+    <script src="libs/Projector.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<script>
+
+    // global variables
+    var canvas1;
+    var renderer;
+    var renderer2;
+    var scene;
+    var camera;
+    var lMaterial,gL1,lL1;
+    var circle;
+    var geom1;
+    var pi = Math.PI;
+    var pi2 = 2*pi;
+    var eps = 1e-10;
+    //var yRight,yLeft;
+   // var l;
+
+    var camSize =8,  near = 0.1, far = 1000;
+
+   var a1= 0.25,a2= 5,a3 = 2,a4 = 4; //bearings in rads of four points on unit circle. 0 is horizontal to right.
+    var pxStart = camSize/2, py =0;
+
+    var gP1,pP1,pMaterial;
+
+
+    var w = 1000; var h = 1000;//width, height of rendering area
+
+
+    function intersectPoint(x1,y1,x2,y2,x3,y3,x4,y4){
+        // intersection two lines - first lined defined by first pair of points, second line by second pair
+        var lineMC12 = new lineMC(x1,y1,x2,y2);
+        var lineMC34 = new lineMC(x3,y3,x4,y4);
+        var mDiff = lineMC34.m  - lineMC12.m;
+        var cDiff = lineMC34.c  - lineMC12.c;
+
+        if (Math.abs(mDiff) < eps) {mDiff = eps};
+
+        this.x =  - cDiff /mDiff ;
+        this.y = ((lineMC34.m) * this.x ) + lineMC34.c;
+    }
+
+    function lineMC(x1,y1,x2,y2){
+        var eps = 1e-10;
+        var run = (x2-x1);
+        if ( Math.abs(run)< eps ) {run = eps};
+        this.m = (y2-y1)/run;
+        this.c =  -((this.m) * x1) + y1;
+    }
+
+
+    function drawLine(x1,y1,x2,y2,xLeft,xRight,colour,scene){
+
+
+
+        var yLeft = getY(x1,y1,x2,y2,xLeft);
+        var yRight = getY(x1,y1,x2,y2,xRight);
+
+
+
+        var gL = new THREE.Geometry();
+        var lMat = new THREE.LineBasicMaterial({ color: colour });
+
+        if (xLeft == xRight)
+
+        {gL.vertices.push(new THREE.Vector3(x1,y1 , 0));
+            gL.vertices.push(new THREE.Vector3(x2,y2 , 0)); }
+
+        else {
+
+            gL.vertices.push(new THREE.Vector3(xRight, yRight, 0));
+            gL.vertices.push(new THREE.Vector3(xLeft, yLeft, 0));
+        }
+
+
+        var l = new THREE.Line(gL, lMat);
+
+
+        return(l);
+
+    }
+
+    function drawUnitCircle(colour,scene){
+
+        var gC = new THREE.RingGeometry( 1,1.02,512 );
+        var cMat = new THREE.MeshBasicMaterial( { color:colour, side: THREE.DoubleSide} );
+        var circle = new THREE.Mesh( gC, cMat );
+        circle.position.x = 0;
+        circle.position.y =0;
+        return(circle);
+    }
+
+
+    function UnitCircleIntersection(xP,yP){
+
+
+        this.x =xP;
+        this.y = yP;
+    }
+
+
+
+
+
+
+    var control;
+
+    control = new function () {
+        this.theta1 = a1;
+        this.theta2 = a2;
+        this.theta3 = a3;
+        this.theta4 =a4;
+
+
+    };
+
+    function addControls(controlObject) {
+        var gui = new dat.GUI();
+        gui.add(controlObject, 'theta1', 0,pi2,0.01); gui.add(controlObject, 'theta2', 0.01, pi2);
+        gui.add(controlObject, 'theta3', 0.01,pi2,0.01); gui.add(controlObject, 'theta4', 0, pi2);
+
+
+    }//end addControls
+
+
+
+    function init() {
+
+        addControls(control);
+
+        //px = camSize/2; py =0;
+        // create a scene, that will hold all our elements such as objects, cameras and lights.
+        scene = new THREE.Scene();
+        camera = new THREE.OrthographicCamera(-camSize,camSize,camSize,- camSize,near,far);
+        renderer2 = new THREE.WebGLRenderer();
+
+
+
+
+
+
+        renderer2.setSize(w,h);
+        document.getElementById("SVG-output").appendChild(renderer2.domElement);
+
+        //*************** Circle***********
+
+        //geom1 = new THREE.RingGeometry( 1,1.02,512 );
+        //var material = new THREE.MeshBasicMaterial( { color: 0xffff00, side: THREE.DoubleSide} );
+        //circle = new THREE.Mesh( geom1, material );
+        //circle.position.x = 0;
+        //circle.position.y =0;
+
+        //scene.add( circle );
+
+            //****************lines**************
+/*
+                lMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+
+        gL1 = new THREE.Geometry();
+        gL2 = new THREE.Geometry();
+
+        yLeft = getY(cosL(control.theta1),sinL(control.theta1),control.px,0,camSize);
+        //gL1.vertices.push(new THREE.Vector3(cosL(control.theta1),sinL(control.theta1) , 0));
+        gL1.vertices.push(new THREE.Vector3(camSize,yLeft , 0));
+        yRight = getY(cosL(control.theta1),sinL(control.theta1),control.px,0,- camSize);
+        gL1.vertices.push(new THREE.Vector3(-camSize,yRight , 0));
+        // gL1.vertices.push(new THREE.Vector3(control.px, 0, 0));
+
+        lL1 = new THREE.Line(gL1, lMaterial);
+        //scene.add(lL1);
+
+        yLeft = getY(cosL(control.theta2),sinL(control.theta2),control.px,0,camSize);
+        //gL1.vertices.push(new THREE.Vector3(cosL(control.theta1),sinL(control.theta1) , 0));
+        gL2.vertices.push(new THREE.Vector3(camSize,yLeft , 0));
+        yRight = getY(cosL(control.theta2),sinL(control.theta2),control.px,0,- camSize);
+        gL2.vertices.push(new THREE.Vector3(-camSize,yRight , 0));
+        // gL1.vertices.push(new THREE.Vector3(control.px, 0, 0));
+
+        lL1 = new THREE.Line(gL1, lMaterial);
+        scene.add(lL1);
+        lL2 = new THREE.Line(gL2, lMaterial);
+        scene.add(lL2);
+
+
+
+
+        gP1 = new THREE.Geometry();
+        gP1.vertices.push(new THREE.Vector3(control.px, 0, 0));
+        pMaterial = new THREE.PointsMaterial( { color: 0xFFFFFF, size: 0.2,transparent: true,
+            opacity: 0.2} );
+        // to get shape -- https://github.com/mrdoob/three.js/blob/master/examples/webgl_points_billboards.html
+        pP1 = new THREE.Points(gP1,pMaterial);
+
+        scene.add(pP1);
+
+
+
+
+            //gP1 = new Three.Geomery();
+        //gP1.vertices.push(new THREE.Vector3(control.px, 0, 0));
+
+        //************************************
+
+
+*/
+        camera.position.x = 0;camera.position.y = 0;camera.position.z = 20;camera.lookAt(scene.position);
+
+
+
+
+        //addControls(control);
+
+
+       //renderIt();
+           //renderer2.render(scene, camera);
+
+
+
+
+render();
+
+
+
+    }//end init
+
+
+
+function render() {
+
+    setUpScene();
+/*
+ var l12,l34,l13,l24,l23,l14,cc;
+
+ while(scene.children.length > 0){
+ scene.children[0].geometry.dispose();
+ scene.remove(scene.children[0]);
+
+ };
+
+
+
+
+ l12 = drawLine(cosL(control.theta1),sinL(control.theta1),cosL(control.theta2),sinL(control.theta2),-camSize,camSize, "blue",scene) ;
+ l34 = drawLine(cosL(control.theta3),sinL(control.theta3),cosL(control.theta4),sinL(control.theta4),-camSize,camSize, "red",scene) ;
+ l13 = drawLine(cosL(control.theta1),sinL(control.theta1),cosL(control.theta3),sinL(control.theta3),-camSize,camSize, "yellow",scene) ;
+ l24 = drawLine(cosL(control.theta2),sinL(control.theta2),cosL(control.theta4),sinL(control.theta4),-camSize,camSize, "green",scene) ;
+ l23 = drawLine(cosL(control.theta2),sinL(control.theta2),cosL(control.theta3),sinL(control.theta3),-camSize,camSize, 0x004444,scene) ;
+ l14 = drawLine(cosL(control.theta1),sinL(control.theta1),cosL(control.theta4),sinL(control.theta4),-camSize,camSize, 0x004444,scene) ;
+ cc = drawUnitCircle("white",scene);
+ scene.add(l12);
+ scene.add(l34);
+ scene.add(l13);
+ scene.add(l24);
+ scene.add(l23);
+ scene.add(l14);
+
+ scene.add(cc);
+
+*/
+
+
+ // lL1.geometry.dispose();
+
+ //scene.remove(circle);
+ //scene.remove(lL1);
+    //scene.remove(lL2);
+ //scene.add(circle);
+
+/*
+ gL1 = new THREE.Geometry();
+    yLeft = getY(cosL(control.theta1),sinL(control.theta1),control.px,0,camSize);
+    //gL1.vertices.push(new THREE.Vector3(cosL(control.theta1),sinL(control.theta1) , 0));
+    gL1.vertices.push(new THREE.Vector3(camSize,yLeft , 0));
+    yRight = getY(cosL(control.theta1),sinL(control.theta1),control.px,0,- camSize);
+    gL1.vertices.push(new THREE.Vector3(-camSize,yRight , 0));
+    // gL1.vertices.push(new THREE.Vector3(control.px, 0, 0));
+
+    lL1 = new THREE.Line(gL1, lMaterial);
+    scene.add(lL1);
+
+    gL2 = new THREE.Geometry();
+    yLeft = getY(cosL(control.theta2),sinL(control.theta2),control.px,0,camSize);
+    //gL1.vertices.push(new THREE.Vector3(cosL(control.theta1),sinL(control.theta1) , 0));
+    gL2.vertices.push(new THREE.Vector3(camSize,yLeft , 0));
+    yRight = getY(cosL(control.theta2),sinL(control.theta2),control.px,0,- camSize);
+    gL2.vertices.push(new THREE.Vector3(-camSize,yRight , 0));
+    // gL1.vertices.push(new THREE.Vector3(control.px, 0, 0));
+
+    lL2 = new THREE.Line(gL2, lMaterial);
+    scene.add(lL2);
+
+
+
+ pP1.position.x = (control.px) - pxStart;
+    */
+
+ //lL1 = new THREE.Line(gL1, lMaterial);
+ //scene.add(lL1);
+
+
+
+
+    renderer2.render(scene, camera);
+
+
+
+    requestAnimationFrame(render);
+
+
+
+
+
+
+//
+}
+
+    function setUpScene(){
+        var l12,l34,l13,l24,l23,l14,l12x,l34x,l13x,l24x,l23x,l14x,cc;
+       var p1x,p1y,p2x,p2y,p3x,p3y,p4x,p4y;
+        var p1234, p1423, p1324;
+        var l13241423;
+
+
+
+        while(scene.children.length > 0){
+
+            scene.children[0].geometry.dispose();
+            scene.children[0].material.dispose();
+            scene.remove(scene.children[0]);
+
+        };
+
+       p1x = cosL(control.theta1);p1y = sinL(control.theta1);
+        p2x = cosL(control.theta2);p2y = sinL(control.theta2);
+        p3x = cosL(control.theta3);p3y = sinL(control.theta3);
+        p4x = cosL(control.theta4);p4y = sinL(control.theta4);
+
+
+
+
+
+       l12x = drawLine(p1x,p1y,p2x,p2y,-camSize,camSize,0x004444, scene) ;
+        //l12 = drawLine(cosL(control.theta1),sinL(control.theta1),cosL(control.theta2),sinL(control.theta2),-camSize,camSize, "blue",scene) ;
+
+        l34x = drawLine(p3x,p3y,p4x,p4y,-camSize,camSize,0x044440,scene) ;
+        l13x = drawLine(p1x,p1y,p3x,p3y,-camSize,camSize, 0x044440,scene) ;
+        l24x = drawLine(p2x,p2y,p4x,p4y,-camSize,camSize, 0x044440,scene) ;
+
+        l12 = drawLine(p1x,p1y,p2x,p2y,0,0, "yellow",scene) ;
+        //l12 = drawLine(cosL(control.theta1),sinL(control.theta1),cosL(control.theta2),sinL(control.theta2),-camSize,camSize, "blue",scene) ;
+
+        l34 = drawLine(p3x,p3y,p4x,p4y,0,0, "yellow",scene) ;
+        l13 = drawLine(p1x,p1y,p3x,p3y,0,0, "yellow",scene) ;
+        l24 = drawLine(p2x,p2y,p4x,p4y,0,0, "yellow",scene) ;
+
+
+
+        l23 = drawLine(p2x,p2y,p3x,p3y,0,0, 0x004444,scene) ;
+        l14 = drawLine(p1x,p1y,p4x,p4y,0,0, 0x004444,scene) ;
+        cc = drawUnitCircle("white",scene);
+        scene.add(l12);
+        scene.add(l34);
+        scene.add(l13);
+        scene.add(l24);
+        scene.add(l12x);
+        scene.add(l34x);
+        scene.add(l13x);
+        scene.add(l24x);
+        scene.add(l23);
+        scene.add(l14);
+
+        p1234 = new intersectPoint(p1x,p1y,p2x,p2y,p3x,p3y,p4x,p4y);
+        p1423 = new intersectPoint(p1x,p1y,p4x,p4y,p2x,p2y,p3x,p3y);
+        p1324 = new intersectPoint(p1x,p1y,p3x,p3y,p2x,p2y,p4x,p4y);
+        l13241423 = drawLine(p1324.x,p1324.y,p1423.x,p1423.y,-camSize,camSize,0xff00ff,scene);
+
+
+        //find m and c of l13241423
+        var mcl13241423 = (new lineMC(p1324.x,p1324.y,p1423.x,p1423.y));
+        var ml13241423 = mcl13241423.m;
+        var cl13241423 = mcl13241423.c;
+
+        // find intersects with unit circle
+        var il13241423UC1x = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i1x;
+        var il13241423UC1y = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i1y;
+        var il13241423UC2x = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i2x;
+        var il13241423UC2y = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i2y;
+
+        var tangentil13241423UC1 = drawLine(il13241423UC1x,il13241423UC1y,p1234.x,p1234.y,0,0,"white",scene);
+        var tangentil13241423UC2 = drawLine(il13241423UC2x,il13241423UC2y,p1234.x,p1234.y,0,0,"white",scene);
+
+
+        scene.add(l13241423);
+        scene.add(tangentil13241423UC1);
+        scene.add(tangentil13241423UC2);
+
+
+
+
+        scene.add(cc);
+    }
+
+
+
+    function cosL(x) {
+
+        if (Math.abs(Math.cos(x)) < eps) { return (eps)};
+
+        return (Math.cos(x))
+    };
+
+
+    function sinL(x) {
+
+        if (Math.abs(Math.sin(x)) < eps) { return (eps)};
+
+        return(Math.sin(x))
+
+    };
+
+    function getY(x1,y1,x2,y2,x){
+    //from two given points on line - calc the y for a general x
+    var eps = 1e-10;
+        var run = (x2-x1);
+        if (Math.abs(run) <eps) run = eps;
+
+    // gradient
+    var m = (y2-y1)/run;
+    //line
+    var y = m*(x-x1) + y1;
+
+    return(y)
+    }
+
+function intersectionsMCLineUnitCircle(m,c){
+
+
+    var tempm = m*m;
+    var tempc = c*c;
+    var diff = tempm - tempc;
+
+    var temp = Math.sqrt(   1 + diff );
+
+    this.i1x = ( (- m*c) + temp) / (1.0 +tempm) ;
+    this.i1y = ( m * (this.i1x) ) + c;
+
+    this.i2x = ( (- m*c) - temp) / (1.0 + tempm) ;
+    this.i2y = ( m * (this.i2x) ) + c;
+
+}
+
+
+
+
+
+// calls the init function when the window is done loading.
+window.onload = init;
+
+</script>
+<body>
+<!--
+<canvas id="myCanvas1" width="800" height="800" style="border:3px solid #0000FF;"></canvas>
+-->
+
+
+<div id="SVG-output"> </div>
+<!--<textarea id="svg" cols=80 rows=6>initial</textarea> -->
+
+</body>
+</html>

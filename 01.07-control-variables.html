@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>01.07 - Control variables</title>
+    <script src="js/three.js"></script>
+    <script src="js/dat.gui.min.js"></script>
+    <script src="libs/SVGRenderer.js"></script>
+    <script src="libs/Projector.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<script>
+
+    // global variables
+    var canvas1;
+    var renderer;
+    var scene;
+    var camera;
+
+    var control;
+
+    function init() {
+
+        //canvas1 = document.getElementById("myCanvas1");
+
+        // create a scene, that will hold all our elements such as objects, cameras and lights.
+        scene = new THREE.Scene();
+
+        // create a camera, which defines where we're looking at.
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        // create a render, sets the background color and the size
+        renderer2 = new THREE.WebGLRenderer();
+        renderer = new THREE.SVGRenderer();
+renderer.setQuality('high');
+renderer.setClearColor(0x00FF00, 1.0);
+//renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(400,400);
+        renderer2.setSize(400,400);
+
+
+// create a cube and add to scene
+var cubeGeometry = new THREE.BoxGeometry(10 * Math.random(), 10 * Math.random(), 10 * Math.random());
+var cubeMaterial = new THREE.MeshNormalMaterial();
+cubeMaterial.transparent = true;
+var cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+cube.name = 'cube';
+scene.add(cube);
+
+// position and point the camera to the center of the scene
+camera.position.x = 15;
+camera.position.y = 16;
+camera.position.z = 13;
+camera.lookAt(scene.position);
+
+// add the output of the renderer to the html element
+//canvas1.body.appendChild(renderer.domElement);
+document.getElementById("SVG-output").appendChild(renderer.domElement);
+
+
+
+control = new function () {
+this.rotationSpeed = 0.005;
+this.scale = 1;
+this.myRadius = 1;
+};
+
+addControls(control);
+
+        renderer.render(scene, camera);
+
+
+
+        document.getElementById("svg").value = renderer.domElement.innerHTML;
+
+// call the render function
+
+        //document.getElementById("SVG-output").removeChild(renderer.domElement);
+        document.getElementById("SVG-output").appendChild(renderer2.domElement);
+
+render();
+
+
+//var svgRenderer = new THREE.SVGRenderer();
+//svgRenderer.setClearColor(0xffffff);
+//svgRenderer.setSize(400,400);
+//svgRenderer.setQuality('high');
+//svgRenderer.render(scene,camera);
+
+
+//var svgContainer = document.getElementById("svg");
+//svgContainer.appendChild(renderer.domElement);
+
+
+
+//svgRenderer.domElement.removeAttribute('width');
+//svgRenderer.domElement.removeAttribute('height');
+
+
+
+
+
+
+
+}
+
+function addControls(controlObject) {
+var gui = new dat.GUI();
+gui.add(controlObject, 'rotationSpeed', -0.1, 0.1);
+gui.add(controlObject, 'scale', 0.01, 2);
+gui.add(controlObject, 'myRadius', 0.1, 5);
+}
+
+function render() {
+renderer2.render(scene, camera);
+
+scene.getObjectByName('cube').rotation.x += (control.rotationSpeed * control.myRadius);
+scene.getObjectByName('cube').scale.set(control.scale, control.scale, control.scale);
+
+requestAnimationFrame(render);
+}
+
+// calls the init function when the window is done loading.
+window.onload = init;
+
+</script>
+<body>
+<!--
+<canvas id="myCanvas1" width="800" height="800" style="border:3px solid #0000FF;"></canvas>
+-->
+<div id="SVG-output"> </div>
+<textarea id="svg" cols=80 rows=6>initial</textarea>
+
+</body>
+</html>

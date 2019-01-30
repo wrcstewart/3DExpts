@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>01.07 - Control variables</title>
+    <script src="js/three.min.js"></script>
+    <script src="js/dat.gui.min.js"></script>
+    <script src="libs/OrbitControls.js"></script>
+
+    <script src="libs/SVGRenderer.js"></script>
+    <script src="libs/Projector.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #gui { position: absolute; top: 1px; right: 1px }
+        #units { position: absolute; top: 2px; right: 10px }
+        #output {position: absolute; top: 100px; left: 1px;width: 800px; height: 800px }
+        #message {position: absolute; top: 905px; left: 1px;width: 800px; height: 100px }
+
+    </style>
+</head>
+<script>
+
+    // global variables
+    var controlsCam;
+    var canvas1;
+    var renderer;
+    var renderer2;
+    var scene;
+    var camera;
+    var lMaterial,gL1,lL1;
+    var p1234,p1423,p1324; // poles - p1234 is trackable
+    var circle;
+    var geom1;
+    var pi = Math.PI;
+    var pi2 = 2*pi;
+    var eps = 1e-10;
+    var c1,c2,c3,c4,cLogic,cShowTangents,cRedPolar,cGreenPolar; //controllers
+    //cShowTangents = false;
+    //cRedPolar =false;cGreenPolar=false;
+    //var yRight,yLeft;
+   // var l;
+
+    var camSize =200,  near = 0.1, far = 1000;
+
+   var a1= 0.13,a2= 5.6,a3 = 2.45,a4 = 4.2; //bearings in rads of four points on unit circle. 0 is horizontal to right.
+    var pxStart = camSize/2, py =0;
+
+    var gP1,pP1,pMaterial;
+
+
+    var w = 800; var h = 800;//width, height of rendering area
+
+
+    function intersectPoint(x1,y1,x2,y2,x3,y3,x4,y4){
+        // intersection two lines - first lined defined by first pair of points, second line by second pair
+        var lineMC12 = new lineMC(x1,y1,x2,y2);
+        var lineMC34 = new lineMC(x3,y3,x4,y4);
+        var mDiff = lineMC34.m  - lineMC12.m;
+        var cDiff = lineMC34.c  - lineMC12.c;
+
+        if (Math.abs(mDiff) < eps) {mDiff = eps};
+
+        this.x =  - cDiff /mDiff ;
+        this.y = ((lineMC34.m) * this.x ) + lineMC34.c;
+    }
+
+    function lineMC(x1,y1,x2,y2){
+        var eps = 1e-10;
+        var run = (x2-x1);
+        if ( Math.abs(run)< eps ) {run = eps};
+        this.m = (y2-y1)/run;
+        this.c =  -((this.m) * x1) + y1;
+    }
+
+
+    function drawLine(x1,y1,x2,y2,xLeft,xRight,colour,scene){
+
+
+
+        var yLeft = getY(x1,y1,x2,y2,xLeft);
+        var yRight = getY(x1,y1,x2,y2,xRight);
+
+
+
+        var gL = new THREE.Geometry();
+        var lMat = new THREE.LineBasicMaterial({ color: colour });
+
+        if (xLeft == xRight)
+
+        {gL.vertices.push(new THREE.Vector3(x1,y1 , 0));
+            gL.vertices.push(new THREE.Vector3(x2,y2 , 0)); }
+
+        else {
+
+            gL.vertices.push(new THREE.Vector3(xRight, yRight, 0));
+            gL.vertices.push(new THREE.Vector3(xLeft, yLeft, 0));
+        }
+
+
+        var l = new THREE.Line(gL, lMat);
+
+
+        return(l);
+
+    }
+
+    function drawUnitCircle(colour,scene){
+
+        var gC = new THREE.RingGeometry( 1,1.02,512 );
+        var cMat = new THREE.MeshBasicMaterial( { color:colour, side: THREE.DoubleSide} );
+        var circle = new THREE.Mesh( gC, cMat );
+        circle.position.x = 0;
+        circle.position.y =0;
+        return(circle);
+    };
+
+
+    function UnitCircleIntersection(xP,yP){
+
+
+        this.x =xP;
+        this.y = yP;
+    };
+
+    function drawTestTriangle(){
+
+        var geometry = new THREE.Geometry();
+        geometry.vertices.push( new THREE.Vector3( -1, -1, 0 ) );
+        geometry.vertices.push( new THREE.Vector3(  1, -1, 0 ) );
+        geometry.vertices.push( new THREE.Vector3(  1,  1, 1 ) );
+
+        //create a new face using vertices 0, 1, 2
+        var normal = new THREE.Vector3( 0, 1, 0 );
+        var color1 = new THREE.Color( 0xFFFF00 );
+        //var materialIndex = 0; optional
+        var face = new THREE.Face3( 0, 1, 2, normal, color1);
+
+
+        //add the face to the geometry's faces array
+        geometry.faces.push( face );
+        var materialF = new THREE.MeshBasicMaterial( {  side: THREE.DoubleSide } );
+        materialF.vertexColors = THREE.FaceColors;
+
+        var testMesh = new THREE.Mesh(geometry,materialF);
+        return(testMesh);
+
+
+    };
+
+
+
+
+    var control;
+
+    control = new function () {
+        this.theta1 = a1;
+        this.theta2 = a2;
+        this.theta3 = a3;
+        this.theta4 =a4;
+        this.control2By1 = false;
+        this.redPolar = false;
+        this.greenPolar = false;
+        this.showTangents = false;
+
+
+    };
+
+    function adjustc1(){
+       // if not control2By1ed return else adjust c2.
+        // pole is at
+
+    if (!cLogic.getValue()) {return;}
+
+
+
+        var p1x = cosL(control.theta1);
+        var p1y = sinL(control.theta1);
+        var polex = p1234.x;
+        var poley = p1234.y;
+        var line12 = new lineMC(p1x,p1y,polex,poley);
+        var intersections = new intersectionsMCLineUnitCircle(line12.m,line12.c);
+
+        var i1x = intersections.i1x;
+        var i1y = intersections.i1y;
+        var i2x = intersections.i2x;
+        var i2y = intersections.i2y;
+
+        var p2x,p2y,angle;
+
+
+//test git1
+        if ( Math.abs(p1x-i1x)<0.01) {p2x = i2x;p2y =i2y;} else {p2x = i1x;p2y = i1y;}
+
+        if (p2x == 0) {angle = - pi/2} else {angle = Math.atan2(p2y,p2x);};
+
+
+        if (angle < 0) {angle = pi2 + angle};
+
+                    c2.setValue(angle);
+
+
+        }
+// test entry 6
+
+    function addControls(controlObject) {
+        var gui = new dat.GUI({name: 'My GUI'});
+        gui.domElement.id = 'gui';
+
+            c1 = gui.add(controlObject, 'theta1', 0,(0.25 * pi2),0.01);
+            c2 = gui.add(controlObject, 'theta2', (0.75 * pi2), 0.98*pi2);
+            c3 = gui.add(controlObject, 'theta3', 0.25*pi2, 0.5*pi2, 0.01);
+            c4 = gui.add(controlObject, 'theta4', 0.5*pi2, 0.75*pi2,0.01);
+            c1.onChange(function(value){
+
+
+                //var temp = c1.getValue();
+            //c4.setValue(4.1);
+
+
+                   adjustc1();
+
+
+
+
+                    });
+
+
+
+
+
+
+    cLogic = gui.add(controlObject, 'control2By1');
+        cShowTangents = gui.add(controlObject,'showTangents');
+        cRedPolar = gui.add(controlObject,'redPolar');
+        cGreenPolar = gui.add(controlObject,'greenPolar');
+
+    }//end addControls8
+
+
+
+    function init() {
+
+        addControls(control);
+
+        //px = camSize/2; py =0;
+        // create a scene, that will hold all our elements such as objects, cameras and lights.
+        scene = new THREE.Scene();
+        //camera = new THREE.OrthographicCamera(-camSize,camSize,camSize,- camSize,near,far);
+        camera = new THREE.PerspectiveCamera( 20, 1, 0.1, 1000 );
+
+        controlsCam = new THREE.OrbitControls( camera );
+        //controlsCam.addEventListener( 'change', render );
+
+
+
+
+        // renderer2 = new THREE.WebGLRenderer();
+
+
+        renderer2 = new THREE.SVGRenderer();
+        renderer2.setClearColor(0x000000);
+        //renderer2.setSize(400,400);
+        renderer2.setQuality('high');
+
+
+
+
+
+        renderer2.setSize(w,h);
+
+        //var svgContainer.appendChild(svgRenderer.domElement);
+
+        document.getElementById("output").appendChild(renderer2.domElement);
+
+       
+
+        controlsCam = new THREE.OrbitControls( camera, renderer2.domElement );
+
+            camera.position.x = 0;camera.position.y = 0;camera.position.z = 20;camera.lookAt(scene.position);
+        camera.rotation.z =  - pi/2;
+        controlsCam.update();  //careful
+
+
+
+
+        //addControls(control);
+
+
+       //renderIt();
+           //renderer2.render(scene, camera);
+
+
+
+
+render();
+
+
+
+    }//end init
+
+
+
+function render() {
+
+    setUpScene();
+
+    controlsCam.update();
+
+
+    renderer2.render(scene, camera);
+
+
+//section below is for SVG export
+    var XMLS = new XMLSerializer();
+    var svgfile = XMLS.serializeToString(renderer2.domElement);
+
+   var svgContainer = document.getElementById("message");
+    svgContainer.innerText = svgfile;
+//endSVG export section.
+
+
+    requestAnimationFrame(render);
+
+
+//
+}
+
+    function setUpScene(){
+        var l12,l34,l13,l24,l23,l14,l12x,l34x,l13x,l24x,l23x,l14x,cc;
+       var p1x,p1y,p2x,p2y,p3x,p3y,p4x,p4y;
+
+        var l13241423;
+
+
+
+        while(scene.children.length > 0){
+
+            scene.children[0].geometry.dispose();
+            scene.children[0].material.dispose();
+            scene.remove(scene.children[0]);
+
+        };
+
+        var temp;
+
+        c2.enabled = false;
+
+
+
+
+
+       p1x = cosL(control.theta1);p1y = sinL(control.theta1);
+        p2x = cosL(control.theta2);p2y = sinL(control.theta2);
+        p3x = cosL(control.theta3);p3y = sinL(control.theta3);
+        p4x = cosL(control.theta4);p4y = sinL(control.theta4);
+
+
+
+
+
+       l12x = drawLine(p1x,p1y,p2x,p2y,-camSize,camSize,0x004444, scene) ;
+        //l12 = drawLine(cosL(control.theta1),sinL(control.theta1),cosL(control.theta2),sinL(control.theta2),-camSize,camSize, "blue",scene) ;
+
+        l34x = drawLine(p3x,p3y,p4x,p4y,-camSize,camSize,0x044440,scene) ;
+        l13x = drawLine(p1x,p1y,p3x,p3y,-camSize,camSize, 0x044440,scene) ;
+        l24x = drawLine(p2x,p2y,p4x,p4y,-camSize,camSize, 0x044440,scene) ;
+
+        l12 = drawLine(p1x,p1y,p2x,p2y,0,0, 0xCCCCCC,scene) ;
+        //l12 = drawLine(cosL(control.theta1),sinL(control.theta1),cosL(control.theta2),sinL(control.theta2),-camSize,camSize, "blue",scene) ;
+
+        l34 = drawLine(p3x,p3y,p4x,p4y,0,0, 0xCCCCCC,scene) ;
+        l13 = drawLine(p1x,p1y,p3x,p3y,0,0, 0xCCCCCC,scene) ;
+        l24 = drawLine(p2x,p2y,p4x,p4y,0,0, 0xCCCCCC,scene) ;
+
+
+
+        l23 = drawLine(p2x,p2y,p3x,p3y,-camSize,camSize, 0x004440,scene) ;
+        l14 = drawLine(p1x,p1y,p4x,p4y,-camSize,camSize, 0x004440,scene) ;
+        cc = drawUnitCircle(0xffffff,scene);
+        scene.add(l12);
+        scene.add(l34);
+        scene.add(l13);
+        scene.add(l24);
+        scene.add(l12x);
+        scene.add(l34x);
+        scene.add(l13x);
+        scene.add(l24x);
+        scene.add(l23);
+        scene.add(l14);
+
+        p1234 = new intersectPoint(p1x,p1y,p2x,p2y,p3x,p3y,p4x,p4y);
+        p1423 = new intersectPoint(p1x,p1y,p4x,p4y,p2x,p2y,p3x,p3y);
+        p1324 = new intersectPoint(p1x,p1y,p3x,p3y,p2x,p2y,p4x,p4y);
+        l13241423 = drawLine(p1324.x,p1324.y,p1423.x,p1423.y,-camSize,camSize,0x0000ff,scene);
+        var l12341423 =  drawLine(p1234.x,p1234.y,p1423.x,p1423.y,-camSize,camSize,0xFF0000,scene);
+        var l12341324 =  drawLine(p1234.x,p1234.y,p1324.x,p1324.y,-camSize,camSize,0x00FF00,scene);
+
+        //find m and c of l13241423
+        var mcl13241423 = (new lineMC(p1324.x,p1324.y,p1423.x,p1423.y));
+        var ml13241423 = mcl13241423.m;
+        var cl13241423 = mcl13241423.c;
+
+        // find intersects with unit circle
+        var il13241423UC1x = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i1x;
+        var il13241423UC1y = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i1y;
+        var il13241423UC2x = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i2x;
+        var il13241423UC2y = new intersectionsMCLineUnitCircle(ml13241423,cl13241423).i2y;
+
+        if (cShowTangents.getValue()) {
+
+            var tangentil13241423UC1 = drawLine(il13241423UC1x, il13241423UC1y, p1234.x, p1234.y, 0, 0, 0x0000AA, scene);
+            var tangentil13241423UC2 = drawLine(il13241423UC2x, il13241423UC2y, p1234.x, p1234.y, 0, 0, 0x0000AA, scene);
+        }
+
+        scene.add(l13241423);
+
+
+        if (cRedPolar.getValue()) {
+            scene.add(l12341423);
+        }
+
+        if (cGreenPolar.getValue()) {
+            scene.add(l12341324);
+
+        }
+
+
+
+        scene.add(tangentil13241423UC1);
+        scene.add(tangentil13241423UC2);
+
+
+            var gP1 = new THREE.Geometry();
+        gP1.vertices.push(new THREE.Vector3(p1234.x,p1234.y, 0));
+        pMaterial = new THREE.PointsMaterial( { color: 0x0000FF, size: 0.05,transparent: true,
+            opacity: 0.7} );
+        // to get shape -- https://github.com/mrdoob/three.js/blob/master/examples/webgl_points_billboards.html
+        pP1 = new THREE.Points(gP1,pMaterial);
+
+        scene.add(pP1);
+
+        var gP2 = new THREE.Geometry();
+        gP2.vertices.push(new THREE.Vector3(p1423.x,p1423.y, 0));
+        p2Material = new THREE.PointsMaterial( { color: 0x00FF00, size: 0.05,transparent: true,
+            opacity: 0.7} );
+        // to get shape -- https://github.com/mrdoob/three.js/blob/master/examples/webgl_points_billboards.html
+        pP2 = new THREE.Points(gP2,p2Material);
+
+        scene.add(pP2);
+
+        var gP3 = new THREE.Geometry();
+        gP3.vertices.push(new THREE.Vector3(p1324.x,p1324.y, 0));
+        p3Material = new THREE.PointsMaterial( { color: 0xFF0000, size: 0.05,transparent: true,
+            opacity: 0.7} );
+        // to get shape -- https://github.com/mrdoob/three.js/blob/master/examples/webgl_points_billboards.html
+        pP3 = new THREE.Points(gP3,p3Material);
+
+        scene.add(pP3);
+
+
+        //var testMesh1;
+        //testMesh1 = drawTestTriangle();
+        //scene.add(testMesh1);
+
+
+        scene.add(cc);
+        //var testMesh1;
+        //testMesh1 = drawTestTriangle();
+        //scene.add(testMesh1);
+
+
+
+
+
+
+    }
+
+
+
+    function cosL(x) {
+
+        if (Math.abs(Math.cos(x)) < eps) { return (eps)};
+
+        return (Math.cos(x))
+    };
+
+
+    function sinL(x) {
+
+        if (Math.abs(Math.sin(x)) < eps) { return (eps)};
+
+        return(Math.sin(x))
+
+    };
+
+    function getY(x1,y1,x2,y2,x){
+    //from two given points on line - calc the y for a general x
+    var eps = 1e-10;
+        var run = (x2-x1);
+        if (Math.abs(run) <eps) run = eps;
+
+    // gradient
+    var m = (y2-y1)/run;
+    //line
+    var y = m*(x-x1) + y1;
+
+    return(y)
+    }
+
+function intersectionsMCLineUnitCircle(m,c){
+
+
+    var tempm = m*m;
+    var tempc = c*c;
+    var diff = tempm - tempc;
+
+    var temp = Math.sqrt(   1 + diff );
+
+    this.i1x = ( (- m*c) + temp) / (1.0 +tempm) ;
+    this.i1y = ( m * (this.i1x) ) + c;
+
+    this.i2x = ( (- m*c) - temp) / (1.0 + tempm) ;
+    this.i2y = ( m * (this.i2x) ) + c;
+
+}
+
+
+
+
+
+// calls the init function when the window is done loading.
+window.onload = init;
+
+
+
+</script>
+
+<!--
+<canvas id="myCanvas1" width="800" height="800" style="border:3px solid #0000FF;"></canvas>
+
+
+-->
+
+<div>  <b> An Interactive Demonstration of Pole and Polar.</b> </div>
+<div> This version of the program uses an SVG renderer without export facility.</div>
+<div> For program help visit: : </div>
+<div>The theory is explained at: <a href= "https://youtu.be/AjVM5Q-pvjw" > You Tube: njWildberger: Hyperbolic Geometry 1</a>  </div>
+<!--
+<div> The 3 square points mark the intersections of lines joining the corners of the quadrilateral.</div>
+<div> A line joining any 2 is the POLAR of the remaining point.</div>
+<div> That point is called the POLE of the line. </div>
+<div> For simplicity, the purple polar only is shown by default</div>
+<div>The theory is explained in:<a href= "https://youtu.be/AjVM5Q-pvjw" > You Tube: njWildberger: Hyperbolic Geometry 1</a>  </div>
+<div> Theta values are in radians counter clockwise from 12 o clock</div>
+<div> When the check box is ticked theta2 attempts to maintain the lower pole constant as theta1 varies.</div>
+<div> This illustrates The Polar Independence Theorem.</div>
+<div> NB. For convenience only, the program constrains the four angles to separate quadrants.</div>
+<div> A more comprehensive program would allow the angles to each take arbitrary values.</div>
+<div> For other programming comments please see:W.R.C Stewart 21-01-2018 <a href= "http://www.google.com" > test</a> </div>
+-->
+
+
+<div id="output"> </div>
+<!--  past development / not relevant <textarea id="svg" cols=80 rows=6>initial</textarea>
+<div id="svgOut">test 1</div> -->
+<!-- -->
+<textarea id ="message" rows="3" cols="150"></textarea>
+</body>
+
+</html>
